@@ -1,0 +1,239 @@
+from classifieur_ai import entraîner_classifieur
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+import joblib
+import os
+
+# Données enrichies
+exemples = [
+    ("Facture EDF du 15 avril 2023", "Facture"),
+    ("Facture Amazon - Commande 12345", "Facture"),
+    ("Facture mensuelle Internet Orange", "Facture"),
+    ("Reçu de paiement de la taxe foncière", "Facture"),
+    ("Devis pour la rénovation de cuisine", "Devis"),
+    ("Proposition de devis - société BTP", "Devis"),
+    ("Estimation du projet peinture", "Devis"),
+    ("Offre tarifaire pour travaux électriques", "Devis"),
+    ("Rapport trimestriel des ventes", "Rapport"),
+    ("Rapport de stage - entreprise L'Oréal", "Rapport"),
+    ("Analyse financière annuelle", "Rapport"),
+    ("Compte-rendu de réunion du 23 mai", "Rapport"),
+    ("Résumé de biologie - chapitre 3", "Notes"),
+    ("Fiche de révision histoire-géo", "Notes"),
+    ("Cours de macroéconomie L1", "Notes"),
+    ("Introduction aux probabilités", "Notes"),
+    ("Contrat de travail à durée déterminée", "Contrat"),
+    ("Accord de location meublée", "Contrat"),
+    ("Conditions générales de vente", "Contrat"),
+    ("Contrat d’assurance habitation", "Contrat"),
+    ("Curriculum Vitae - Julie Dupont", "CV"),
+    ("Mon CV 2024 - développeur web", "CV"),
+    ("Expériences professionnelles et compétences", "CV"),
+    ("Profil LinkedIn exporté", "CV"),
+    ("Lettre de motivation pour master RH", "Lettre"),
+    ("Lettre de recommandation étudiant", "Lettre"),
+    ("Lettre de démission", "Lettre"),
+    ("Lettre administrative - demande de logement", "Lettre"),
+    ("Objet : relance de facture impayée", "Mail"),
+    ("Message de suivi de candidature", "Mail"),
+    ("Email de confirmation de rendez-vous", "Mail"),
+    ("Bonjour, voici le compte rendu de la réunion", "Mail"),
+]
+
+# Séparation en données d'entraînement et de test
+textes, labels = zip(*exemples)
+X_train, X_test, y_train, y_test = train_test_split(textes, labels, test_size=0.25, random_state=42)
+
+# Entraînement
+vect = TfidfVectorizer()
+X_train_vect = vect.fit_transform(X_train)
+X_test_vect = vect.transform(X_test)
+
+clf = LogisticRegression(max_iter=1000)
+clf.fit(X_train_vect, y_train)
+
+# Prédiction et affichage
+y_pred = clf.predict(X_test_vect)
+print("\n📊 Rapport de performance du modèle :\n")
+print(classification_report(y_test, y_pred))
+
+# Sauvegarde du modèle
+os.makedirs("modeles", exist_ok=True)
+joblib.dump(clf, "modeles/modele_clf.pkl")
+joblib.dump(vect, "modeles/vectorizer.pkl")
+print("\n✅ Nouveau modèle sauvegardé dans 'modeles/'")
+
+import os
+import shutil
+from classifieur_ai import predire_categorie
+from pdfminer.high_level import extract_text as extract_text_pdf
+from docx import Document  # pip install python-docx
+
+def lire_contenu_fichier(chemin_fichier):
+    _, extension = os.path.splitext(chemin_fichier)
+    extension = extension[1:].lower()
+    try:
+        if extension == "txt":
+            with open(chemin_fichier, 'r', encoding='utf-8', errors='ignore') as f:
+                return f.read(500).lower()
+        elif extension == "pdf":
+            return extract_text_pdf(chemin_fichier, maxpages=1).lower()
+        elif extension == "docx":
+            try:
+                document = Document(chemin_fichier)
+                texte_docx = ""
+                for paragraph in document.paragraphs:
+                    texte_docx += paragraph.text + "\n"
+                return texte_docx[:500].lower()
+            except Exception as e:
+                print(f"Erreur lors de la lecture du fichier DOCX {chemin_fichier}: {e}")
+                return None
+        else:
+            return None
+    except Exception as e:
+        print(f"Erreur lors de la lecture de {chemin_fichier}: {e}")
+        return None
+
+def grouper_et_trier_fichiers(dossier):
+    resultats_tri = {}
+
+    for nom_fichier in os.listdir(dossier):
+        chemin_complet = os.path.join(dossier, nom_fichier)
+        if os.path.isfile(chemin_complet):
+            _, extension = os.path.splitext(nom_fichier)
+            extension = extension[1:].lower()
+            categorie_predite = None
+
+            if extension in ["jpg", "jpeg", "png", "gif"]:
+                categorie = "Images"
+            elif extension in ["mp4", "avi", "mov"]:
+                categorie = "Vidéos"
+            elif extension in ["mp3", "wav", "aac"]:
+                categorie = "Audio"
+            elif extension in ["txt", "pdf", "docx"]:
+                contenu = lire_contenu_fichier(chemin_complet)
+                if contenu:
+                    categorie_predite = predire_categorie(contenu)
+                categorie = categorie_predite if categorie_predite else "Non_Classifié"
+            else:
+                categorie = "Autres_Fichiers"
+
+            if categorie not in resultats_tri:
+                resultats_tri[categorie] = []
+            resultats_tri[categorie].append(chemin_complet)
+
+    return resultats_tri
+
+def deplacer_fichiers_par_categorie(resultats_tri, dossier_base):
+    for categorie, fichiers in resultats_tri.items():
+        chemin_categorie = os.path.join(dossier_base, categorie)
+        os.makedirs(chemin_categorie, exist_ok=True)
+        for chemin_fichier in fichiers:
+            nom_fichier = os.path.basename(chemin_fichier)
+            nouveau_chemin = os.path.join(chemin_categorie, nom_fichier)
+            try:
+                shutil.move(chemin_fichier, nouveau_chemin)
+                print(f"✅ {nom_fichier} déplacé vers {categorie}/")
+            except Exception as e:
+                print(f"⚠️ Erreur déplacement {nom_fichier} : {e}")
+
+if __name__ == "__main__":
+    dossier_a_trier = input("📂 Entrez le chemin du dossier à trier : ").strip()
+    if not os.path.isdir(dossier_a_trier):
+        print("❌ Dossier introuvable.")
+    else:
+        resultats = grouper_et_trier_fichiers(dossier_a_trier)
+        deplacer_fichiers_par_categorie(resultats, dossier_a_trier)
+        print("🎉 Tri terminé.")
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+import joblib
+import os
+
+MODELE_PATH = "modeles/modele_clf.pkl"
+VECTORIZER_PATH = "modeles/vectorizer.pkl"
+
+def entraîner_classifieur(exemples):
+    textes, labels = zip(*exemples)
+    vect = TfidfVectorizer()
+    X = vect.fit_transform(textes)
+
+    clf = LogisticRegression()
+    clf.fit(X, labels)
+
+    os.makedirs("modeles", exist_ok=True)
+    joblib.dump(clf, MODELE_PATH)
+    joblib.dump(vect, VECTORIZER_PATH)
+    print("✅ Modèle entraîné et sauvegardé")
+
+def predire_categorie(texte):
+    try:
+        clf = joblib.load(MODELE_PATH)
+        vect = joblib.load(VECTORIZER_PATH)
+        X = vect.transform([texte])
+        prediction = clf.predict(X)
+        return prediction[0]
+    except FileNotFoundError:
+        print("⚠️ Modèle d'IA non trouvé. Veuillez exécuter 'entrainement_test.py' d'abord.")
+        return None
+    except Exception as e:
+        print(f"⚠️ Erreur lors du chargement ou de la prédiction du modèle : {e}")
+        return None
+from classifieur_ai import entraîner_classifieur
+
+exemples = [
+    # Factures
+    ("Facture EDF du 15 avril 2023", "Facture"),
+    ("Facture Amazon - Commande 12345", "Facture"),
+    ("Facture mensuelle Internet Orange", "Facture"),
+    ("Reçu de paiement de la taxe foncière", "Facture"),
+
+    # Devis
+    ("Devis pour la rénovation de cuisine", "Devis"),
+    ("Proposition de devis - société BTP", "Devis"),
+    ("Estimation du projet peinture", "Devis"),
+    ("Offre tarifaire pour travaux électriques", "Devis"),
+
+    # Rapports
+    ("Rapport trimestriel des ventes", "Rapport"),
+    ("Rapport de stage - entreprise L'Oréal", "Rapport"),
+    ("Analyse financière annuelle", "Rapport"),
+    ("Compte-rendu de réunion du 23 mai", "Rapport"),
+
+    # Notes de cours
+    ("Résumé de biologie - chapitre 3", "Notes"),
+    ("Fiche de révision histoire-géo", "Notes"),
+    ("Cours de macroéconomie L1", "Notes"),
+    ("Introduction aux probabilités", "Notes"),
+
+    # Contrats
+    ("Contrat de travail à durée déterminée", "Contrat"),
+    ("Accord de location meublée", "Contrat"),
+    ("Conditions générales de vente", "Contrat"),
+    ("Contrat d’assurance habitation", "Contrat"),
+
+    # CV
+    ("Curriculum Vitae - Julie Dupont", "CV"),
+    ("Mon CV 2024 - développeur web", "CV"),
+    ("Expériences professionnelles et compétences", "CV"),
+    ("Profil LinkedIn exporté", "CV"),
+
+    # Lettres
+    ("Lettre de motivation pour master RH", "Lettre"),
+    ("Lettre de recommandation étudiant", "Lettre"),
+    ("Lettre de démission", "Lettre"),
+    ("Lettre administrative - demande de logement", "Lettre"),
+
+    # Mails
+    ("Objet : relance de facture impayée", "Mail"),
+    ("Message de suivi de candidature", "Mail"),
+    ("Email de confirmation de rendez-vous", "Mail"),
+    ("Bonjour, voici le compte rendu de la réunion", "Mail"),
+]
+
+entraîner_classifieur(exemples)
+
+print("✅ Entraînement enrichi terminé. Modèle mis à jour avec 8 catégories.")
