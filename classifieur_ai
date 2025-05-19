@@ -1,0 +1,34 @@
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+import joblib
+import os
+
+MODELE_PATH = "modeles/modele_clf.pkl"
+VECTORIZER_PATH = "modeles/vectorizer.pkl"
+
+def entraîner_classifieur(exemples):
+    textes, labels = zip(*exemples)
+    vect = TfidfVectorizer()
+    X = vect.fit_transform(textes)
+
+    clf = LogisticRegression()
+    clf.fit(X, labels)
+
+    os.makedirs("modeles", exist_ok=True)
+    joblib.dump(clf, MODELE_PATH)
+    joblib.dump(vect, VECTORIZER_PATH)
+    print("✅ Modèle entraîné et sauvegardé")
+
+def predire_categorie(texte):
+    try:
+        clf = joblib.load(MODELE_PATH)
+        vect = joblib.load(VECTORIZER_PATH)
+        X = vect.transform([texte])
+        prediction = clf.predict(X)
+        return prediction[0]
+    except FileNotFoundError:
+        print("⚠️ Modèle d'IA non trouvé. Veuillez exécuter 'entrainement_test.py' d'abord.")
+        return None
+    except Exception as e:
+        print(f"⚠️ Erreur lors du chargement ou de la prédiction du modèle : {e}")
+        return None
