@@ -6,8 +6,19 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
-from recherche_intelligente import lancer_recherche
-from gestion_utilisateurs import verifier_acces, ajouter_commentaire
+from recherche import recherche_mot_cle  # CHANGÉ ICI
+from gestion_utilisateurs import verifier_acces, ajouter_commentaire  # Si ce fichier existe toujours
+
+def lancer_recherche(dossier):
+    mot = input("Entrez un mot-clé à rechercher : ").strip()
+    fichiers = recherche_mot_cle(dossier, mot)
+
+    if fichiers:
+        print("Fichiers trouvés :")
+        for f in fichiers:
+            print(" -", f)
+    else:
+        print("Aucun fichier trouvé avec ce mot-clé.")
 
 def menu_principal():
     while True:
@@ -18,7 +29,7 @@ def menu_principal():
         choix = input("Choisissez une option : ").strip()
 
         if choix == "1":
-            dossier = "test_docs"  # Change ici le nom du dossier contenant les fichiers
+            dossier = "test_docs"  # Dossier où tu mets tes fichiers à rechercher
             if os.path.exists(dossier) and os.path.isdir(dossier):
                 lancer_recherche(dossier)
             else:
@@ -39,3 +50,4 @@ def menu_principal():
 
 if __name__ == "__main__":
     menu_principal()
+
