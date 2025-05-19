@@ -1,0 +1,13 @@
+from tri.recherche import recherche_mot_cle
+
+if __name__ == "__main__":
+    dossier = "documents"
+    mot = input("Entrez un mot-cle a rechercher : ")
+    fichiers = recherche_mot_cle(dossier, mot)
+
+    if fichiers:
+        print("Fichiers trouvés :")
+        for f in fichiers:
+            print(" -", f)
+    else:
+        print("Aucun fichier trouvé avec ce mot-clé.")
